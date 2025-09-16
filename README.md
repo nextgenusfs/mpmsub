@@ -51,6 +51,37 @@ for job in p.completed_jobs:
     print(f"Memory used: {job.memory_used:.1f}MB")
 ```
 
+## Performance Benchmarks
+
+🚀 **See mpmsub's performance benefits in action:**
+
+```bash
+# Quick performance demonstration
+python examples/benchmark_demo.py
+
+# Comprehensive benchmark suite
+python benchmarks/run_all_benchmarks.py
+```
+
+The benchmarks demonstrate:
+- **1.2-2x speedup** in memory-constrained scenarios
+- **10-30% better success rate** under memory pressure
+- **Intelligent resource optimization** for mixed workloads
+- **System stability** and crash prevention
+
+See [`benchmarks/README.md`](benchmarks/README.md) for detailed performance analysis.
+
+## Documentation
+
+📚 **Complete documentation is available at: [https://nextgenusfs.github.io/mpmsub/](https://nextgenusfs.github.io/mpmsub/)**
+
+The documentation includes:
+- Detailed installation guide
+- Comprehensive tutorials and examples
+- Complete API reference with auto-generated docs
+- Performance tips and troubleshooting
+- Advanced usage patterns
+
 ## API Reference
 
 ### Creating a Cluster

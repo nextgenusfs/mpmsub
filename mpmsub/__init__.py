@@ -24,6 +24,8 @@ Example usage:
         print(f"Memory used: {job['memory_used']:.1f}MB")
 """
 
+from typing import List, Optional, Union, Any
+
 from .cluster import Cluster, Job
 from .utils import parse_memory_string, parse_cpu_string, format_memory
 
@@ -57,7 +59,12 @@ def cluster(p=None, m=None, verbose=True, progress_bar=True):
     return Cluster(cpus=p, memory=m, verbose=verbose, progress_bar=progress_bar)
 
 
-def job(cmd, p=None, m=None, **kwargs):
+def job(
+    cmd: List[str],
+    p: Optional[Union[int, str]] = None,
+    m: Optional[Union[str, int]] = None,
+    **kwargs: Any,
+) -> Job:
     """
     Create a new Job object with a concise interface.
 
