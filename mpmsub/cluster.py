@@ -86,7 +86,7 @@ class JobResult:
     """Result of a completed job."""
 
     job_id: str
-    cmd: List[str]
+    cmd: Union[List[str], "Pipeline"]
     returncode: int = 0
     stdout: str = ""
     stderr: str = ""
@@ -108,37 +108,88 @@ class ResourceUsage:
     active_jobs: int = 0
 
 
+class Pipeline:
+    """
+    Represents a pipeline of commands connected via pipes.
+
+    This allows chaining multiple subprocess commands together,
+    similar to shell pipes (cmd1 | cmd2 | cmd3).
+    """
+
+    def __init__(self, commands: List[List[str]]):
+        """
+        Create a new pipeline.
+
+        Args:
+            commands: List of commands, where each command is a list of strings.
+                     Commands will be piped together in order.
+
+        Examples:
+            >>> pipeline = Pipeline([
+            ...     ["cat", "file.txt"],
+            ...     ["grep", "pattern"],
+            ...     ["sort"]
+            ... ])
+        """
+        if not commands or len(commands) < 2:
+            raise ValueError("Pipeline must have at least 2 commands")
+
+        self.commands = commands
+
+    def __repr__(self) -> str:
+        """String representation of the pipeline."""
+        cmd_strs = []
+        for cmd in self.commands:
+            cmd_str = " ".join(cmd[:3])
+            if len(cmd) > 3:
+                cmd_str += "..."
+            cmd_strs.append(cmd_str)
+        return f"Pipeline({' | '.join(cmd_strs)})"
+
+
 class Job:
     """
     Object-oriented interface for job specification.
 
     Provides a more intuitive way to create jobs with IDE support,
     while maintaining compatibility with the dictionary interface.
+    Supports both single commands and pipelines.
     """
 
     def __init__(
         self,
-        cmd: List[str],
+        cmd: Union[List[str], Pipeline, None] = None,
         p: Union[int, str, None] = None,
         m: Union[str, int, None] = None,
         id: Optional[str] = None,
         cwd: Optional[str] = None,
         env: Optional[Dict[str, str]] = None,
         timeout: Optional[float] = None,
+        pipeline: Optional[List[List[str]]] = None,
     ):
         """
         Create a new job.
 
         Args:
-            cmd: Command to execute as list of strings
+            cmd: Command to execute as list of strings, or Pipeline object
             p: Number of CPU cores needed (default: 1)
             m: Memory requirement (e.g., "1G", "512M", default: unlimited)
             id: Custom job identifier (auto-generated if None)
             cwd: Working directory for the job
             env: Environment variables for the job
             timeout: Timeout in seconds
+            pipeline: Alternative way to specify pipeline as list of commands
         """
-        self.cmd = cmd
+        # Handle pipeline specification
+        if pipeline is not None:
+            self.cmd = Pipeline(pipeline)
+        elif isinstance(cmd, Pipeline):
+            self.cmd = cmd
+        elif cmd is not None:
+            self.cmd = cmd
+        else:
+            raise ValueError("Must specify either 'cmd' or 'pipeline'")
+
         self.p = p
         self.m = m
         self.id = id
@@ -176,6 +227,18 @@ class Job:
         self.id = job_id
         return self
 
+    def pipe_to(self, next_cmd: List[str]) -> "Job":
+        """Add another command to the pipeline (builder pattern)."""
+        if isinstance(self.cmd, Pipeline):
+            # Extend existing pipeline
+            self.cmd.commands.append(next_cmd)
+        elif isinstance(self.cmd, list):
+            # Convert single command to pipeline
+            self.cmd = Pipeline([self.cmd, next_cmd])
+        else:
+            raise ValueError("Cannot pipe from non-command job")
+        return self
+
     def to_dict(self) -> Dict[str, Any]:
         """Convert to dictionary format for internal use."""
         return {
@@ -190,10 +253,13 @@ class Job:
 
     def __repr__(self) -> str:
         """String representation of the job."""
-        cmd_str = " ".join(self.cmd[:3])
-        if len(self.cmd) > 3:
-            cmd_str += "..."
-        return f"Job(cmd=[{cmd_str}], p={self.p}, m={self.m})"
+        if isinstance(self.cmd, Pipeline):
+            return f"Job(pipeline={self.cmd}, p={self.p}, m={self.m})"
+        else:
+            cmd_str = " ".join(self.cmd[:3])
+            if len(self.cmd) > 3:
+                cmd_str += "..."
+            return f"Job(cmd=[{cmd_str}], p={self.p}, m={self.m})"
 
 
 class JobQueue:
@@ -438,6 +504,40 @@ class Cluster:
             },
         }
 
+    def describe_resources(self):
+        """Print detailed information about cluster resources."""
+        import psutil
+
+        # System resources
+        system_memory = psutil.virtual_memory()
+        system_cpus = psutil.cpu_count()
+
+        print("🖥️  System Resources:")
+        print(f"   CPUs: {system_cpus} cores")
+        print(
+            f"   Memory: {format_memory(system_memory.total / (1024**2))} total, {format_memory(system_memory.available / (1024**2))} available"
+        )
+        print()
+
+        print("⚙️  Cluster Configuration:")
+        print(
+            f"   CPUs: {self.max_cpus} cores ({self.max_cpus / system_cpus * 100:.0f}% of system)"
+        )
+        print(
+            f"   Memory: {format_memory(self.max_memory_mb)} ({self.max_memory_mb / (system_memory.total / (1024**2)) * 100:.0f}% of system)"
+        )
+        print()
+
+        print("📊 Resource Utilization:")
+        print(
+            f"   CPU slots used: {self.resource_usage.cpu_slots_used}/{self.max_cpus}"
+        )
+        print(
+            f"   Memory used: {format_memory(self.resource_usage.memory_used)}/{format_memory(self.max_memory_mb)}"
+        )
+        print(f"   Active jobs: {self.resource_usage.active_jobs}")
+        print()
+
     def run(self, max_workers: Optional[int] = None) -> Dict[str, Any]:
         """
         Run all queued jobs with optimal scheduling.
@@ -508,8 +608,14 @@ class Cluster:
 
                         if self.verbose:
                             status = "✓" if result.success else "✗"
+                            if isinstance(result.cmd, Pipeline):
+                                cmd_desc = f"Pipeline: {' | '.join([' '.join(c[:2]) for c in result.cmd.commands[:2]])}..."
+                            else:
+                                cmd_desc = " ".join(result.cmd[:3]) + (
+                                    "..." if len(result.cmd) > 3 else ""
+                                )
                             self.logger.info(
-                                f"{status} {result.job_id}: {' '.join(result.cmd[:3])}... "
+                                f"{status} {result.job_id}: {cmd_desc} "
                                 f"({format_duration(result.runtime)}, {format_memory(result.memory_used)})"
                             )
 
@@ -537,9 +643,14 @@ class Cluster:
                     self._update_resource_usage(next_job["p"], next_job["m"])
 
                     if self.verbose:
-                        self.logger.info(
-                            f"→ Started {next_job['id']}: {' '.join(next_job['cmd'][:3])}..."
-                        )
+                        cmd = next_job["cmd"]
+                        if isinstance(cmd, Pipeline):
+                            cmd_desc = f"Pipeline: {' | '.join([' '.join(c[:2]) for c in cmd.commands[:2]])}..."
+                        else:
+                            cmd_desc = " ".join(cmd[:3]) + (
+                                "..." if len(cmd) > 3 else ""
+                            )
+                        self.logger.info(f"→ Started {next_job['id']}: {cmd_desc}")
 
                 # Check if we're done
                 if not futures and self.job_queue.get_stats()["pending"] == 0:
@@ -574,41 +685,78 @@ class Cluster:
         )
 
         try:
-            # Prepare subprocess arguments
-            subprocess_kwargs = {
-                "stdout": subprocess.PIPE,
-                "stderr": subprocess.PIPE,
-                "text": True,
-                "cwd": job.get("cwd"),
-                "env": job.get("env"),
-            }
+            # Check if this is a pipeline or single command
+            if isinstance(cmd, Pipeline):
+                # Execute pipeline
+                processes, monitor_thread = self._execute_pipeline(job_id, cmd, job)
 
-            # Start the process
-            process = subprocess.Popen(cmd, **subprocess_kwargs)
+                # Wait for completion with optional timeout
+                timeout = job.get("timeout")
+                try:
+                    # Wait for the last process in the pipeline
+                    last_process = processes[-1]
+                    stdout, stderr = last_process.communicate(timeout=timeout)
+                    result.stdout = stdout
+                    result.stderr = stderr
+                    result.returncode = last_process.returncode
+                    result.success = last_process.returncode == 0
 
-            # Start memory monitoring
-            monitor_thread = self.memory_monitor.start_monitoring(job_id, process)
+                    # Wait for all processes in the pipeline and check their exit codes
+                    for i, process in enumerate(processes):
+                        if process.returncode is None:
+                            # Process hasn't finished yet, wait for it
+                            process.wait()
 
-            # Wait for completion with optional timeout
-            timeout = job.get("timeout")
-            try:
-                stdout, stderr = process.communicate(timeout=timeout)
-                result.stdout = stdout
-                result.stderr = stderr
-                result.returncode = process.returncode
-                result.success = process.returncode == 0
+                        if process.returncode != 0:
+                            result.success = False
+                            result.returncode = process.returncode
+                            if not result.error:
+                                result.error = f"Pipeline command {i + 1} failed with exit code {process.returncode}"
+                            break
 
-            except subprocess.TimeoutExpired:
-                process.kill()
-                stdout, stderr = process.communicate()
-                result.stdout = stdout
-                result.stderr = stderr
-                result.returncode = -1
-                result.success = False
-                result.error = f"Job timed out after {timeout} seconds"
+                except subprocess.TimeoutExpired:
+                    # Kill all processes in the pipeline
+                    for process in reversed(processes):
+                        try:
+                            process.kill()
+                        except Exception:
+                            pass
+
+                    # Collect output from last process
+                    stdout, stderr = processes[-1].communicate()
+                    result.stdout = stdout
+                    result.stderr = stderr
+                    result.returncode = -1
+                    result.success = False
+                    result.error = f"Pipeline timed out after {timeout} seconds"
+            else:
+                # Execute single command
+                processes, monitor_thread = self._execute_single_command(
+                    job_id, cmd, job
+                )
+                process = processes[0]
+
+                # Wait for completion with optional timeout
+                timeout = job.get("timeout")
+                try:
+                    stdout, stderr = process.communicate(timeout=timeout)
+                    result.stdout = stdout
+                    result.stderr = stderr
+                    result.returncode = process.returncode
+                    result.success = process.returncode == 0
+
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    stdout, stderr = process.communicate()
+                    result.stdout = stdout
+                    result.stderr = stderr
+                    result.returncode = -1
+                    result.success = False
+                    result.error = f"Job timed out after {timeout} seconds"
 
             # Wait for monitoring thread to finish
-            monitor_thread.join(timeout=1.0)
+            if monitor_thread:
+                monitor_thread.join(timeout=1.0)
 
             # Get memory usage
             result.memory_used = self.memory_monitor.get_peak_memory(job_id)
@@ -624,6 +772,84 @@ class Cluster:
             result.runtime = result.end_time - result.start_time
 
         return result
+
+    def _execute_single_command(self, job_id: str, cmd: List[str], job: Dict[str, Any]):
+        """Execute a single command and return process and monitor thread."""
+        # Prepare subprocess arguments
+        subprocess_kwargs = {
+            "stdout": subprocess.PIPE,
+            "stderr": subprocess.PIPE,
+            "text": True,
+            "cwd": job.get("cwd"),
+            "env": job.get("env"),
+        }
+
+        # Start the process
+        process = subprocess.Popen(cmd, **subprocess_kwargs)
+
+        # Start memory monitoring
+        monitor_thread = self.memory_monitor.start_monitoring(job_id, process)
+
+        return [process], monitor_thread
+
+    def _execute_pipeline(self, job_id: str, pipeline: Pipeline, job: Dict[str, Any]):
+        """Execute a pipeline of commands and return processes and monitor thread."""
+        processes = []
+
+        # Prepare common subprocess arguments
+        base_kwargs = {
+            "text": True,
+            "cwd": job.get("cwd"),
+            "env": job.get("env"),
+        }
+
+        try:
+            # Create processes for the pipeline
+            for i, cmd in enumerate(pipeline.commands):
+                if i == 0:
+                    # First command: stdin from parent, stdout to pipe
+                    kwargs = {
+                        **base_kwargs,
+                        "stdout": subprocess.PIPE,
+                        "stderr": subprocess.PIPE,
+                    }
+                elif i == len(pipeline.commands) - 1:
+                    # Last command: stdin from previous pipe, stdout/stderr captured
+                    kwargs = {
+                        **base_kwargs,
+                        "stdin": processes[i - 1].stdout,
+                        "stdout": subprocess.PIPE,
+                        "stderr": subprocess.PIPE,
+                    }
+                else:
+                    # Middle command: stdin from previous pipe, stdout to pipe
+                    kwargs = {
+                        **base_kwargs,
+                        "stdin": processes[i - 1].stdout,
+                        "stdout": subprocess.PIPE,
+                        "stderr": subprocess.PIPE,
+                    }
+
+                process = subprocess.Popen(cmd, **kwargs)
+                processes.append(process)
+
+                # Close the previous process's stdout to allow it to receive SIGPIPE
+                if i > 0:
+                    processes[i - 1].stdout.close()
+
+            # Start memory monitoring on the last process (which will capture the whole pipeline)
+            monitor_thread = self.memory_monitor.start_monitoring(job_id, processes[-1])
+
+            return processes, monitor_thread
+
+        except Exception as e:
+            # Clean up any processes that were started
+            for process in processes:
+                try:
+                    process.kill()
+                except Exception:
+                    pass
+            raise e
 
     def _update_resource_usage(self, cpu_delta: int, memory_delta: Optional[float]):
         """Update resource usage tracking."""

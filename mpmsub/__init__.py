@@ -26,16 +26,17 @@ Example usage:
 
 from typing import List, Optional, Union, Any
 
-from .cluster import Cluster, Job
+from .cluster import Cluster, Job, Pipeline
 from .utils import parse_memory_string, parse_cpu_string, format_memory
 
-__version__ = "0.1.0"
+# Version info
+__version__ = "2025.01.0"
 __author__ = "Jon Palmer"
 __email__ = "nextgenusfs@gmail.com"
 
 
 # Main API function
-def cluster(p=None, m=None, verbose=True, progress_bar=True):
+def cluster(p=None, m=None, verbose=True, progress_bar=True, describe=False):
     """
     Create a new compute cluster for job execution.
 
@@ -46,6 +47,7 @@ def cluster(p=None, m=None, verbose=True, progress_bar=True):
            If None, auto-detects available memory.
         verbose: Whether to print progress information.
         progress_bar: Whether to show a progress bar during execution.
+        describe: Whether to print cluster resource information.
 
     Returns:
         Cluster: A new cluster instance ready for job scheduling.
@@ -54,9 +56,14 @@ def cluster(p=None, m=None, verbose=True, progress_bar=True):
         >>> import mpmsub
         >>> p = mpmsub.cluster(p=4, m="8G")
         >>> p = mpmsub.cluster()  # Auto-detect resources
-        >>> p = mpmsub.cluster(p=4, m="8G", progress_bar=False)  # No progress bar
+        >>> p = mpmsub.cluster(describe=True)  # Show available resources
     """
-    return Cluster(cpus=p, memory=m, verbose=verbose, progress_bar=progress_bar)
+    cluster_obj = Cluster(cpus=p, memory=m, verbose=verbose, progress_bar=progress_bar)
+
+    if describe:
+        cluster_obj.describe_resources()
+
+    return cluster_obj
 
 
 def job(
@@ -85,13 +92,45 @@ def job(
     return Job(cmd=cmd, p=p, m=m, **kwargs)
 
 
+def pipeline(
+    commands: List[List[str]],
+    p: Optional[Union[int, str]] = None,
+    m: Optional[Union[str, int]] = None,
+    **kwargs: Any,
+) -> Job:
+    """
+    Create a new Job with a pipeline of commands.
+
+    Args:
+        commands: List of commands to pipe together
+        p: Number of CPU cores needed (default: 1)
+        m: Memory requirement (e.g., "1G", "512M", default: unlimited)
+        **kwargs: Additional job parameters (id, cwd, env, timeout)
+
+    Returns:
+        Job: A new job instance with a pipeline.
+
+    Examples:
+        >>> import mpmsub
+        >>> j = mpmsub.pipeline([
+        ...     ["cat", "file.txt"],
+        ...     ["grep", "pattern"],
+        ...     ["sort"]
+        ... ], p=1, m="100M")
+    """
+    return Job(cmd=Pipeline(commands), p=p, m=m, **kwargs)
+
+
 # Convenience exports
 __all__ = [
     "cluster",
     "job",
+    "pipeline",
     "Cluster",
     "Job",
+    "Pipeline",
     "parse_memory_string",
     "parse_cpu_string",
     "format_memory",
+    "__version__",
 ]

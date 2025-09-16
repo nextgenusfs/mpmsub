@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mpmsub"
-version = "0.1.0"
+version = "2025.09.16"
 description = "Memory-aware multiprocessing subprocess execution library"
 readme = "README.md"
 license = {text = "MIT"}

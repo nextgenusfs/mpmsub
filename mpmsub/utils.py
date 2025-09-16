@@ -167,6 +167,7 @@ def validate_job(job: dict) -> dict:
 
     Args:
         job: Job dictionary with 'cmd', 'p', 'm' keys.
+             'cmd' can be a list of strings or a Pipeline object.
 
     Returns:
         dict: Normalized job specification.
@@ -181,8 +182,24 @@ def validate_job(job: dict) -> dict:
         raise ValueError("Job must have 'cmd' key")
 
     cmd = job["cmd"]
-    if not isinstance(cmd, list) or not cmd:
-        raise ValueError("Job 'cmd' must be a non-empty list")
+
+    # Import Pipeline here to avoid circular imports
+    from .cluster import Pipeline
+
+    # Validate command or pipeline
+    if isinstance(cmd, Pipeline):
+        # Pipeline validation
+        if not cmd.commands or len(cmd.commands) < 2:
+            raise ValueError("Pipeline must have at least 2 commands")
+        for i, pipeline_cmd in enumerate(cmd.commands):
+            if not isinstance(pipeline_cmd, list) or not pipeline_cmd:
+                raise ValueError(f"Pipeline command {i + 1} must be a non-empty list")
+    elif isinstance(cmd, list):
+        # Single command validation
+        if not cmd:
+            raise ValueError("Job 'cmd' must be a non-empty list")
+    else:
+        raise ValueError("Job 'cmd' must be a list or Pipeline object")
 
     # Validate and parse CPU requirement
     cpus = parse_cpu_string(job.get("p", 1))
