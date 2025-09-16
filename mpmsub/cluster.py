@@ -166,6 +166,8 @@ class Job:
         env: Optional[Dict[str, str]] = None,
         timeout: Optional[float] = None,
         pipeline: Optional[List[List[str]]] = None,
+        stdout: Optional[str] = None,
+        stderr: Optional[str] = None,
     ):
         """
         Create a new job.
@@ -179,6 +181,8 @@ class Job:
             env: Environment variables for the job
             timeout: Timeout in seconds
             pipeline: Alternative way to specify pipeline as list of commands
+            stdout: File path to redirect stdout to (optional)
+            stderr: File path to redirect stderr to (optional)
         """
         # Handle pipeline specification
         if pipeline is not None:
@@ -196,6 +200,8 @@ class Job:
         self.cwd = cwd
         self.env = env
         self.timeout = timeout
+        self.stdout = stdout
+        self.stderr = stderr
 
     def cpu(self, cores: Union[int, str]) -> "Job":
         """Set CPU requirement (builder pattern)."""
@@ -227,6 +233,16 @@ class Job:
         self.id = job_id
         return self
 
+    def stdout_to(self, file_path: str) -> "Job":
+        """Redirect stdout to file (builder pattern)."""
+        self.stdout = file_path
+        return self
+
+    def stderr_to(self, file_path: str) -> "Job":
+        """Redirect stderr to file (builder pattern)."""
+        self.stderr = file_path
+        return self
+
     def pipe_to(self, next_cmd: List[str]) -> "Job":
         """Add another command to the pipeline (builder pattern)."""
         if isinstance(self.cmd, Pipeline):
@@ -249,6 +265,8 @@ class Job:
             "cwd": self.cwd,
             "env": self.env,
             "timeout": self.timeout,
+            "stdout": self.stdout,
+            "stderr": self.stderr,
         }
 
     def __repr__(self) -> str:
@@ -696,8 +714,18 @@ class Cluster:
                     # Wait for the last process in the pipeline
                     last_process = processes[-1]
                     stdout, stderr = last_process.communicate(timeout=timeout)
-                    result.stdout = stdout
-                    result.stderr = stderr
+
+                    # Handle stdout/stderr - if redirected to files, we won't have the content
+                    if job.get("stdout"):
+                        result.stdout = f"[Output redirected to {job['stdout']}]"
+                    else:
+                        result.stdout = stdout
+
+                    if job.get("stderr"):
+                        result.stderr = f"[Error output redirected to {job['stderr']}]"
+                    else:
+                        result.stderr = stderr
+
                     result.returncode = last_process.returncode
                     result.success = last_process.returncode == 0
 
@@ -724,8 +752,18 @@ class Cluster:
 
                     # Collect output from last process
                     stdout, stderr = processes[-1].communicate()
-                    result.stdout = stdout
-                    result.stderr = stderr
+
+                    # Handle stdout/stderr for timeout case
+                    if job.get("stdout"):
+                        result.stdout = f"[Output redirected to {job['stdout']}]"
+                    else:
+                        result.stdout = stdout
+
+                    if job.get("stderr"):
+                        result.stderr = f"[Error output redirected to {job['stderr']}]"
+                    else:
+                        result.stderr = stderr
+
                     result.returncode = -1
                     result.success = False
                     result.error = f"Pipeline timed out after {timeout} seconds"
@@ -740,16 +778,36 @@ class Cluster:
                 timeout = job.get("timeout")
                 try:
                     stdout, stderr = process.communicate(timeout=timeout)
-                    result.stdout = stdout
-                    result.stderr = stderr
+
+                    # Handle stdout/stderr - if redirected to files, we won't have the content
+                    if job.get("stdout"):
+                        result.stdout = f"[Output redirected to {job['stdout']}]"
+                    else:
+                        result.stdout = stdout
+
+                    if job.get("stderr"):
+                        result.stderr = f"[Error output redirected to {job['stderr']}]"
+                    else:
+                        result.stderr = stderr
+
                     result.returncode = process.returncode
                     result.success = process.returncode == 0
 
                 except subprocess.TimeoutExpired:
                     process.kill()
                     stdout, stderr = process.communicate()
-                    result.stdout = stdout
-                    result.stderr = stderr
+
+                    # Handle stdout/stderr for timeout case
+                    if job.get("stdout"):
+                        result.stdout = f"[Output redirected to {job['stdout']}]"
+                    else:
+                        result.stdout = stdout
+
+                    if job.get("stderr"):
+                        result.stderr = f"[Error output redirected to {job['stderr']}]"
+                    else:
+                        result.stderr = stderr
+
                     result.returncode = -1
                     result.success = False
                     result.error = f"Job timed out after {timeout} seconds"
@@ -775,10 +833,19 @@ class Cluster:
 
     def _execute_single_command(self, job_id: str, cmd: List[str], job: Dict[str, Any]):
         """Execute a single command and return process and monitor thread."""
+        # Handle stdout/stderr redirection
+        stdout_dest = subprocess.PIPE
+        stderr_dest = subprocess.PIPE
+
+        if job.get("stdout"):
+            stdout_dest = open(job["stdout"], "w")
+        if job.get("stderr"):
+            stderr_dest = open(job["stderr"], "w")
+
         # Prepare subprocess arguments
         subprocess_kwargs = {
-            "stdout": subprocess.PIPE,
-            "stderr": subprocess.PIPE,
+            "stdout": stdout_dest,
+            "stderr": stderr_dest,
             "text": True,
             "cwd": job.get("cwd"),
             "env": job.get("env"),
@@ -795,6 +862,15 @@ class Cluster:
     def _execute_pipeline(self, job_id: str, pipeline: Pipeline, job: Dict[str, Any]):
         """Execute a pipeline of commands and return processes and monitor thread."""
         processes = []
+
+        # Handle stdout/stderr redirection for the final command
+        final_stdout = subprocess.PIPE
+        final_stderr = subprocess.PIPE
+
+        if job.get("stdout"):
+            final_stdout = open(job["stdout"], "w")
+        if job.get("stderr"):
+            final_stderr = open(job["stderr"], "w")
 
         # Prepare common subprocess arguments
         base_kwargs = {
@@ -814,12 +890,12 @@ class Cluster:
                         "stderr": subprocess.PIPE,
                     }
                 elif i == len(pipeline.commands) - 1:
-                    # Last command: stdin from previous pipe, stdout/stderr captured
+                    # Last command: stdin from previous pipe, stdout/stderr captured or redirected
                     kwargs = {
                         **base_kwargs,
                         "stdin": processes[i - 1].stdout,
-                        "stdout": subprocess.PIPE,
-                        "stderr": subprocess.PIPE,
+                        "stdout": final_stdout,
+                        "stderr": final_stderr,
                     }
                 else:
                     # Middle command: stdin from previous pipe, stdout to pipe

@@ -1,6 +1,6 @@
 # Adding Jobs
 
-mpmsub provides three flexible interfaces for creating and managing jobs, allowing you to choose the approach that best fits your coding style and requirements.
+mpmsub provides multiple flexible interfaces for creating and managing jobs, including support for subprocess pipelines and output redirection. Choose the approach that best fits your coding style and requirements.
 
 ## Job Interfaces Overview
 
@@ -9,6 +9,7 @@ mpmsub provides three flexible interfaces for creating and managing jobs, allowi
 | **Dictionary** | Simple jobs, existing code | `{"cmd": [...], "p": 1}` |
 | **Job Object** | Complex jobs, IDE support | `Job([...]).cpu(1).memory("1G")` |
 | **Convenience Function** | Quick creation | `job([...], p=1, m="1G")` |
+| **Pipeline** | Chained commands | `pipeline([["cat"], ["grep"]], ...)` |
 
 ## Dictionary Interface
 
@@ -30,14 +31,16 @@ p.jobs.append({
     "timeout": 300 # 5 minute timeout
 })
 
-# Job with environment
+# Job with environment and output redirection
 p.jobs.append({
     "cmd": ["python", "analysis.py"],
     "p": 1,
     "m": "2G",
     "cwd": "/data/analysis",
     "env": {"PYTHONPATH": "/custom/libs"},
-    "id": "analysis_job"
+    "id": "analysis_job",
+    "stdout": "analysis_output.txt",
+    "stderr": "analysis_errors.txt"
 })
 ```
 
@@ -64,12 +67,14 @@ p = mpmsub.cluster(p=4, m="8G")
 job = mpmsub.Job(["echo", "hello"])
 p.jobs.append(job)
 
-# Builder pattern (fluent interface)
+# Builder pattern (fluent interface) with output redirection
 job = mpmsub.Job(["python", "script.py"]) \
     .cpu(2) \
     .memory("1G") \
     .with_timeout(300) \
-    .with_id("analysis")
+    .with_id("analysis") \
+    .stdout_to("output.txt") \
+    .stderr_to("errors.txt")
 
 p.jobs.append(job)
 
@@ -103,19 +108,21 @@ import mpmsub
 
 p = mpmsub.cluster(p=4, m="8G")
 
-# Quick job creation
-job1 = mpmsub.job(["echo", "hello"], p=1, m="100M")
-job2 = mpmsub.job(["python", "script.py"], p=2, m="1G", timeout=300)
+# Quick job creation (flexible API)
+job1 = mpmsub.job(["echo", "hello"], cpu=1, memory="100M")
+job2 = mpmsub.job(["python", "script.py"], cpus=2, memory="1G", timeout=300, stdout="output.txt")
 
 p.jobs.extend([job1, job2])
 
-# With additional parameters
+# With additional parameters and output redirection
 job3 = mpmsub.job(
     ["python", "analysis.py"],
-    p=1, m="2G",
+    cpu=1, memory="2G",
     cwd="/data/analysis",
     env={"PYTHONPATH": "/custom/libs"},
-    id="analysis_job"
+    id="analysis_job",
+    stdout="analysis_output.txt",
+    stderr="analysis_errors.txt"
 )
 
 p.jobs.append(job3)
@@ -130,6 +137,64 @@ p.jobs.append(job3)
 - ❌ Less fluent than builder pattern
 - ❌ All parameters in one call
 
+## Pipeline Interface
+
+Chain subprocess commands together with automatic piping, similar to shell pipes (`cmd1 | cmd2 | cmd3`):
+
+```python
+import mpmsub
+
+p = mpmsub.cluster(cpu=4, memory="8G")
+
+# Method 1: Pipeline convenience function
+pipeline_job = mpmsub.pipeline([
+    ["cat", "data.txt"],
+    ["grep", "pattern"],
+    ["sort"],
+    ["uniq"]
+], cpu=1, memory="500M", id="data_processing", stdout="results.txt")
+
+p.jobs.append(pipeline_job)
+
+# Method 2: Job with Pipeline object
+pipeline_obj = mpmsub.Pipeline([
+    ["echo", "hello world"],
+    ["tr", "a-z", "A-Z"],
+    ["sed", "s/HELLO/GREETINGS/g"]
+])
+job = mpmsub.Job(cmd=pipeline_obj).cpu(1).memory("100M").stdout_to("output.txt")
+
+p.jobs.append(job)
+
+# Method 3: Builder pattern with pipe_to()
+job = mpmsub.Job(["cat", "input.txt"]) \
+    .pipe_to(["grep", "important"]) \
+    .pipe_to(["sort"]) \
+    .pipe_to(["head", "-10"]) \
+    .cpu(1).memory("200M") \
+    .stdout_to("top_results.txt")
+
+p.jobs.append(job)
+```
+
+**Pipeline Features:**
+- ✅ Automatic subprocess piping (equivalent to shell `|`)
+- ✅ Error handling for individual commands in the pipeline
+- ✅ Memory monitoring across the entire pipeline
+- ✅ Output redirection for the final command
+- ✅ Multiple creation interfaces for flexibility
+- ✅ Full integration with resource scheduling
+
+**Pros:**
+- ✅ Natural shell-like command chaining
+- ✅ Automatic process management
+- ✅ Resource monitoring for entire pipeline
+- ✅ Multiple creation methods
+
+**Cons:**
+- ❌ More complex than single commands
+- ❌ Debugging can be challenging
+
 ## Job Parameters
 
 All interfaces support the same parameters:
@@ -138,40 +203,47 @@ All interfaces support the same parameters:
 
 | Parameter | Type | Description |
 |-----------|------|-------------|
-| `cmd` | `List[str]` | Command and arguments to execute |
+| `cmd` | `List[str]` or `Pipeline` | Command and arguments to execute, or Pipeline object |
 
 ### Optional Parameters
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
-| `p` | `int` or `str` | `1` | Number of CPU cores |
-| `m` | `str` or `int` | `None` | Memory limit |
+| `p`/`cpu`/`cpus` | `int` or `str` | `1` | Number of CPU cores |
+| `m`/`memory` | `str` or `int` | `None` | Memory limit |
 | `id` | `str` | Auto-generated | Custom job identifier |
 | `cwd` | `str` | `None` | Working directory |
 | `env` | `Dict[str, str]` | `None` | Environment variables |
 | `timeout` | `float` | `None` | Timeout in seconds |
+| `stdout` | `str` | `None` | File path for stdout redirection |
+| `stderr` | `str` | `None` | File path for stderr redirection |
 
 ### Parameter Details
 
-#### CPU Cores (`p`)
+#### CPU Cores (`p`/`cpu`/`cpus`)
 ```python
-# Integer
-p=1    # 1 core
-p=4    # 4 cores
+# Multiple parameter names supported (flexible API)
+p=1         # Traditional
+cpu=1       # Alternative
+cpus=4      # Alternative
 
 # String (converted to int)
-p="2"  # 2 cores
+cpu="2"     # 2 cores
 ```
 
-#### Memory (`m`)
+#### Memory (`m`/`memory`)
 ```python
+# Multiple parameter names supported (flexible API)
+m="1G"         # Traditional
+memory="1G"    # Alternative
+
 # String formats
-m="1G"     # 1 gigabyte
-m="512M"   # 512 megabytes
-m="2048K"  # 2048 kilobytes
+memory="1G"     # 1 gigabyte
+memory="512M"   # 512 megabytes
+memory="2048K"  # 2048 kilobytes
 
 # Integer (megabytes)
-m=1024     # 1024 MB
+memory=1024     # 1024 MB
 ```
 
 #### Environment Variables (`env`)
@@ -183,25 +255,53 @@ env={
 }
 ```
 
+#### Output Redirection (`stdout`/`stderr`)
+```python
+# Redirect stdout and stderr to files
+stdout="output.txt"      # Capture stdout
+stderr="errors.txt"      # Capture stderr
+
+# Both can be used together
+job = mpmsub.job(
+    ["python", "script.py"],
+    cpu=1, memory="1G",
+    stdout="results.txt",
+    stderr="errors.txt"
+)
+
+# Using Job object builder pattern
+job = mpmsub.Job(["python", "script.py"]) \
+    .cpu(1).memory("1G") \
+    .stdout_to("results.txt") \
+    .stderr_to("errors.txt")
+```
+
 ## Mixed Interface Usage
 
-You can freely mix all three interfaces:
+You can freely mix all interfaces including pipelines:
 
 ```python
 import mpmsub
 
-p = mpmsub.cluster(p=4, m="8G")
+p = mpmsub.cluster(cpu=4, memory="8G")
 
 # Mix different approaches
 jobs = [
-    # Dictionary
-    {"cmd": ["echo", "dict job"], "p": 1, "m": "100M"},
-    
-    # Job object
-    mpmsub.Job(["echo", "object job"]).cpu(1).memory("150M"),
-    
-    # Convenience function
-    mpmsub.job(["echo", "convenience job"], p=1, m="200M"),
+    # Dictionary with output redirection
+    {"cmd": ["echo", "dict job"], "cpu": 1, "memory": "100M", "stdout": "dict_output.txt"},
+
+    # Job object with builder pattern
+    mpmsub.Job(["echo", "object job"]).cpu(1).memory("150M").stderr_to("object_errors.txt"),
+
+    # Convenience function (flexible API)
+    mpmsub.job(["echo", "convenience job"], cpus=1, memory="200M"),
+
+    # Pipeline
+    mpmsub.pipeline([
+        ["cat", "data.txt"],
+        ["grep", "pattern"],
+        ["sort"]
+    ], cpu=1, memory="300M", stdout="pipeline_results.txt"),
 ]
 
 p.jobs.extend(jobs)

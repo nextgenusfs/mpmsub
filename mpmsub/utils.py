@@ -224,6 +224,8 @@ def validate_job(job: dict) -> dict:
         "cwd": job.get("cwd"),
         "env": job.get("env"),
         "timeout": job.get("timeout"),
+        "stdout": job.get("stdout"),
+        "stderr": job.get("stderr"),
     }
 
     return normalized

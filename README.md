@@ -6,6 +6,9 @@ A simple, intuitive Python library for running subprocess commands with intellig
 
 - **Simple API**: Easy-to-use interface for subprocess execution
 - **Memory-aware scheduling**: Automatically manages memory constraints
+- **Pipeline support**: Chain subprocess commands with automatic piping
+- **Output redirection**: Redirect stdout/stderr to files automatically
+- **Flexible API**: Multiple parameter names (p/cpu/cpus, m/memory) for convenience
 - **Resource monitoring**: Tracks actual vs estimated resource usage
 - **Job profiling**: Measure actual memory usage to optimize future runs
 - **Progress tracking**: Optional progress bar with ETA for long-running jobs
@@ -32,14 +35,21 @@ pip install -e .
 ```python
 import mpmsub
 
-# Create a cluster with 6 CPUs and 16GB memory limit
-p = mpmsub.cluster(p=6, m="16G")
+# Create a cluster with 6 CPUs and 16GB memory limit (flexible API)
+p = mpmsub.cluster(cpu=6, memory="16G")  # or p=6, m="16G"
 
 # Add jobs with different resource requirements (dictionary style)
 p.jobs.append({"cmd": ["example", "subprocess", "cmd"], "p": 1, "m": "1G"})
 
-# Or use the Job object interface
-p.jobs.append(mpmsub.Job(["another", "command"]).cpu(2).memory("2G"))
+# Or use the Job object interface with output redirection
+p.jobs.append(mpmsub.Job(["another", "command"]).cpu(2).memory("2G").stdout_to("output.txt"))
+
+# Add a pipeline that chains commands together
+p.jobs.append(mpmsub.pipeline([
+    ["cat", "data.txt"],
+    ["grep", "pattern"],
+    ["sort"]
+], cpu=1, memory="500M", stdout="results.txt"))
 
 # Run all jobs with optimal scheduling
 p.run()
@@ -90,17 +100,23 @@ The documentation includes:
 # Auto-detect system resources
 p = mpmsub.cluster()
 
-# Specify resources explicitly
-p = mpmsub.cluster(p=4, m="8G")
+# Specify resources explicitly (flexible API)
+p = mpmsub.cluster(p=4, m="8G")           # Traditional syntax
+p = mpmsub.cluster(cpu=4, memory="8G")    # Alternative syntax
+p = mpmsub.cluster(cpus=4, memory="8G")   # Alternative syntax
+p = mpmsub.cluster(p=4, memory="8G")      # Mixed syntax
 
 # Control verbosity and progress bar
-p = mpmsub.cluster(p=4, m="8G", verbose=True, progress_bar=True)
-p = mpmsub.cluster(p=4, m="8G", progress_bar=False)  # Disable progress bar
+p = mpmsub.cluster(cpu=4, memory="8G", verbose=True, progress_bar=True)
+p = mpmsub.cluster(cpu=4, memory="8G", progress_bar=False)  # Disable progress bar
+
+# Show available resources
+p = mpmsub.cluster(describe=True)  # Displays system and cluster resources
 
 # Memory can be specified in various formats
-p = mpmsub.cluster(p=4, m="8192M")  # MB
-p = mpmsub.cluster(p=4, m="8G")     # GB
-p = mpmsub.cluster(p=4, m=8192)     # MB as integer
+p = mpmsub.cluster(cpu=4, memory="8192M")  # MB
+p = mpmsub.cluster(cpu=4, memory="8G")     # GB
+p = mpmsub.cluster(cpu=4, memory=8192)     # MB as integer
 ```
 
 ### Adding Jobs
@@ -118,6 +134,8 @@ Jobs are specified as dictionaries with the following keys:
 - `cwd` (optional): Working directory
 - `env` (optional): Environment variables
 - `timeout` (optional): Timeout in seconds
+- `stdout` (optional): File path to redirect stdout to
+- `stderr` (optional): File path to redirect stderr to
 
 ```python
 # Simple job
@@ -131,13 +149,15 @@ p.jobs.append({
     "timeout": 300 # 5 minute timeout
 })
 
-# Job with custom environment
+# Job with custom environment and output redirection
 p.jobs.append({
     "cmd": ["python", "script.py"],
     "p": 1,
     "m": "1G",
     "cwd": "/path/to/workdir",
-    "env": {"PYTHONPATH": "/custom/path"}
+    "env": {"PYTHONPATH": "/custom/path"},
+    "stdout": "output.txt",
+    "stderr": "errors.txt"
 })
 ```
 
@@ -152,12 +172,14 @@ import mpmsub
 job = mpmsub.Job(["echo", "hello"])
 p.jobs.append(job)
 
-# Builder pattern (fluent interface)
+# Builder pattern (fluent interface) with output redirection
 job = mpmsub.Job(["my_program", "input.txt"]) \
     .cpu(2) \
     .memory("4G") \
     .with_timeout(300) \
-    .with_id("analysis_job")
+    .with_id("analysis_job") \
+    .stdout_to("results.txt") \
+    .stderr_to("errors.txt")
 p.jobs.append(job)
 
 # Step-by-step building
@@ -168,9 +190,9 @@ job.working_dir("/path/to/workdir")
 job.environment({"PYTHONPATH": "/custom/path"})
 p.jobs.append(job)
 
-# Convenience function for quick job creation
-job1 = mpmsub.job(["echo", "convenience"], p=1, m="100M")
-job2 = mpmsub.job(["python", "script.py"], p=2, timeout=300)
+# Convenience function for quick job creation (flexible API)
+job1 = mpmsub.job(["echo", "convenience"], cpu=1, memory="100M")
+job2 = mpmsub.job(["python", "script.py"], cpus=2, timeout=300, stdout="output.txt")
 
 # Mix all approaches
 jobs = [
@@ -188,6 +210,50 @@ p.jobs.extend(jobs)
 - ✓ Validation at creation time
 - ✓ Full compatibility with dictionary interface
 - ✓ Convenience function for quick creation
+- ✓ Built-in support for output redirection
+
+#### Pipeline Interface (New)
+
+mpmsub supports chaining subprocess commands together using pipes, similar to shell pipes:
+
+```python
+import mpmsub
+
+# Method 1: Using the pipeline() convenience function
+pipeline_job = mpmsub.pipeline([
+    ["cat", "data.txt"],
+    ["grep", "pattern"],
+    ["sort"],
+    ["uniq"]
+], cpu=1, memory="500M", id="data_processing", stdout="results.txt")
+
+# Method 2: Using Job with Pipeline object
+pipeline_obj = mpmsub.Pipeline([
+    ["echo", "hello world"],
+    ["tr", "a-z", "A-Z"],
+    ["sed", "s/HELLO/GREETINGS/g"]
+])
+job = mpmsub.Job(cmd=pipeline_obj).cpu(1).memory("100M").stdout_to("output.txt")
+
+# Method 3: Using Job with pipe_to() builder pattern
+job = mpmsub.Job(["cat", "input.txt"]) \
+    .pipe_to(["grep", "important"]) \
+    .pipe_to(["sort"]) \
+    .pipe_to(["head", "-10"]) \
+    .cpu(1).memory("200M") \
+    .stdout_to("top_results.txt")
+
+# Add pipeline jobs to cluster
+p.jobs.extend([pipeline_job, job])
+```
+
+**Pipeline Features:**
+- ✓ Automatic subprocess piping (equivalent to shell `|`)
+- ✓ Error handling for individual commands in the pipeline
+- ✓ Memory monitoring across the entire pipeline
+- ✓ Output redirection for the final command
+- ✓ Multiple creation interfaces for flexibility
+- ✓ Full integration with resource scheduling
 
 ### Running Jobs
 
@@ -299,8 +365,10 @@ Memory can be specified in several formats:
 See the `examples/` directory for more detailed examples:
 
 - `basic_example.py` - Simple usage demonstration
-- `memory_intensive.py` - Memory-constrained job scheduling
-- `cpu_intensive.py` - CPU-bound job management
+- `pipeline_demo.py` - **NEW!** Comprehensive pipeline and enhancement demo
+- `job_object_demo.py` - Object-oriented job interface examples
+- `memory_example.py` - Memory-constrained job scheduling
+- `profiling_example.py` - Job profiling and optimization
 
 ## Requirements
 

@@ -201,6 +201,8 @@ class TestCluster:
             "cwd": None,
             "env": None,
             "timeout": 30.0,
+            "stdout": None,
+            "stderr": None,
         }
         assert job_dict == expected
 

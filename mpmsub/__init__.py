@@ -28,15 +28,28 @@ from typing import List, Optional, Union, Any
 
 from .cluster import Cluster, Job, Pipeline
 from .utils import parse_memory_string, parse_cpu_string, format_memory
+import importlib.metadata
 
-# Version info
-__version__ = "2025.01.0"
+try:
+    __version__ = importlib.metadata.version("mpmsub")
+except importlib.metadata.PackageNotFoundError:
+    __version__ = "25.9.16"  # Default version if package is not installed
+
 __author__ = "Jon Palmer"
 __email__ = "nextgenusfs@gmail.com"
 
 
 # Main API function
-def cluster(p=None, m=None, verbose=True, progress_bar=True, describe=False):
+def cluster(
+    p=None,
+    m=None,
+    cpu=None,
+    cpus=None,
+    memory=None,
+    verbose=True,
+    progress_bar=True,
+    describe=False,
+):
     """
     Create a new compute cluster for job execution.
 
@@ -45,6 +58,9 @@ def cluster(p=None, m=None, verbose=True, progress_bar=True, describe=False):
            If None, auto-detects available CPUs.
         m: Memory limit as string (e.g., "16G", "2048M") or int (MB).
            If None, auto-detects available memory.
+        cpu: Alternative to 'p' - Number of CPUs (int) or CPU specification (str).
+        cpus: Alternative to 'p' - Number of CPUs (int) or CPU specification (str).
+        memory: Alternative to 'm' - Memory limit as string (e.g., "16G", "2048M") or int (MB).
         verbose: Whether to print progress information.
         progress_bar: Whether to show a progress bar during execution.
         describe: Whether to print cluster resource information.
@@ -55,10 +71,20 @@ def cluster(p=None, m=None, verbose=True, progress_bar=True, describe=False):
     Examples:
         >>> import mpmsub
         >>> p = mpmsub.cluster(p=4, m="8G")
+        >>> p = mpmsub.cluster(cpu=4, memory="8G")  # Alternative syntax
+        >>> p = mpmsub.cluster(cpus=4, memory="8G")  # Alternative syntax
         >>> p = mpmsub.cluster()  # Auto-detect resources
         >>> p = mpmsub.cluster(describe=True)  # Show available resources
     """
-    cluster_obj = Cluster(cpus=p, memory=m, verbose=verbose, progress_bar=progress_bar)
+    # Handle multiple CPU parameter names (p, cpu, cpus)
+    cpu_param = p or cpu or cpus
+
+    # Handle multiple memory parameter names (m, memory)
+    memory_param = m or memory
+
+    cluster_obj = Cluster(
+        cpus=cpu_param, memory=memory_param, verbose=verbose, progress_bar=progress_bar
+    )
 
     if describe:
         cluster_obj.describe_resources()
@@ -70,6 +96,9 @@ def job(
     cmd: List[str],
     p: Optional[Union[int, str]] = None,
     m: Optional[Union[str, int]] = None,
+    cpu: Optional[Union[int, str]] = None,
+    cpus: Optional[Union[int, str]] = None,
+    memory: Optional[Union[str, int]] = None,
     **kwargs: Any,
 ) -> Job:
     """
@@ -79,7 +108,10 @@ def job(
         cmd: Command to execute as list of strings
         p: Number of CPU cores needed (default: 1)
         m: Memory requirement (e.g., "1G", "512M", default: unlimited)
-        **kwargs: Additional job parameters (id, cwd, env, timeout)
+        cpu: Alternative to 'p' - Number of CPU cores needed
+        cpus: Alternative to 'p' - Number of CPU cores needed
+        memory: Alternative to 'm' - Memory requirement
+        **kwargs: Additional job parameters (id, cwd, env, timeout, stdout, stderr)
 
     Returns:
         Job: A new job instance.
@@ -87,15 +119,25 @@ def job(
     Examples:
         >>> import mpmsub
         >>> j = mpmsub.job(["echo", "hello"], p=1, m="100M")
+        >>> j = mpmsub.job(["echo", "hello"], cpu=1, memory="100M")  # Alternative syntax
         >>> j = mpmsub.job(["python", "script.py"], p=2, m="1G", timeout=300)
     """
-    return Job(cmd=cmd, p=p, m=m, **kwargs)
+    # Handle multiple CPU parameter names (p, cpu, cpus)
+    cpu_param = p or cpu or cpus
+
+    # Handle multiple memory parameter names (m, memory)
+    memory_param = m or memory
+
+    return Job(cmd=cmd, p=cpu_param, m=memory_param, **kwargs)
 
 
 def pipeline(
     commands: List[List[str]],
     p: Optional[Union[int, str]] = None,
     m: Optional[Union[str, int]] = None,
+    cpu: Optional[Union[int, str]] = None,
+    cpus: Optional[Union[int, str]] = None,
+    memory: Optional[Union[str, int]] = None,
     **kwargs: Any,
 ) -> Job:
     """
@@ -105,7 +147,10 @@ def pipeline(
         commands: List of commands to pipe together
         p: Number of CPU cores needed (default: 1)
         m: Memory requirement (e.g., "1G", "512M", default: unlimited)
-        **kwargs: Additional job parameters (id, cwd, env, timeout)
+        cpu: Alternative to 'p' - Number of CPU cores needed
+        cpus: Alternative to 'p' - Number of CPU cores needed
+        memory: Alternative to 'm' - Memory requirement
+        **kwargs: Additional job parameters (id, cwd, env, timeout, stdout, stderr)
 
     Returns:
         Job: A new job instance with a pipeline.
@@ -117,8 +162,18 @@ def pipeline(
         ...     ["grep", "pattern"],
         ...     ["sort"]
         ... ], p=1, m="100M")
+        >>> j = mpmsub.pipeline([
+        ...     ["cat", "file.txt"],
+        ...     ["grep", "pattern"]
+        ... ], cpu=1, memory="100M")  # Alternative syntax
     """
-    return Job(cmd=Pipeline(commands), p=p, m=m, **kwargs)
+    # Handle multiple CPU parameter names (p, cpu, cpus)
+    cpu_param = p or cpu or cpus
+
+    # Handle multiple memory parameter names (m, memory)
+    memory_param = m or memory
+
+    return Job(cmd=Pipeline(commands), p=cpu_param, m=memory_param, **kwargs)
 
 
 # Convenience exports

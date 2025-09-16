@@ -12,6 +12,10 @@ Complete API documentation for mpmsub.
 
 ::: mpmsub.job
 
+### pipeline()
+
+::: mpmsub.pipeline
+
 ## Core Classes
 
 ### Cluster
@@ -21,6 +25,10 @@ Complete API documentation for mpmsub.
 ### Job
 
 ::: mpmsub.Job
+
+### Pipeline
+
+::: mpmsub.Pipeline
 
 ## Utility Functions
 
@@ -46,8 +54,10 @@ import mpmsub
 # Auto-detect resources
 p = mpmsub.cluster()
 
-# Specify resources
-p = mpmsub.cluster(p=4, m="8G")
+# Specify resources (flexible API)
+p = mpmsub.cluster(p=4, m="8G")           # Traditional
+p = mpmsub.cluster(cpu=4, memory="8G")    # Alternative
+p = mpmsub.cluster(cpus=4, memory="8G")   # Alternative
 
 # Control output
 p = mpmsub.cluster(p=4, m="8G", verbose=False, progress_bar=False)
@@ -56,27 +66,54 @@ p = mpmsub.cluster(p=4, m="8G", verbose=False, progress_bar=False)
 ### Creating Jobs
 
 ```python
-# Dictionary interface
-job = {"cmd": ["echo", "hello"], "p": 1, "m": "100M"}
+# Dictionary interface with output redirection
+job = {"cmd": ["echo", "hello"], "p": 1, "m": "100M", "stdout": "output.txt"}
 
-# Object interface
-job = mpmsub.Job(["echo", "hello"]).cpu(1).memory("100M")
+# Object interface with builder pattern
+job = mpmsub.Job(["echo", "hello"]).cpu(1).memory("100M").stdout_to("output.txt")
 
-# Convenience function
-job = mpmsub.job(["echo", "hello"], p=1, m="100M")
+# Convenience function (flexible API)
+job = mpmsub.job(["echo", "hello"], cpu=1, memory="100M", stdout="output.txt")
+```
+
+### Creating Pipelines
+
+```python
+# Pipeline convenience function
+pipeline_job = mpmsub.pipeline([
+    ["cat", "data.txt"],
+    ["grep", "pattern"],
+    ["sort"]
+], cpu=1, memory="500M", stdout="results.txt")
+
+# Pipeline object with Job
+pipeline_obj = mpmsub.Pipeline([
+    ["echo", "hello world"],
+    ["tr", "a-z", "A-Z"]
+])
+job = mpmsub.Job(cmd=pipeline_obj).cpu(1).stdout_to("output.txt")
+
+# Builder pattern with pipe_to()
+job = mpmsub.Job(["cat", "input.txt"]) \
+    .pipe_to(["grep", "important"]) \
+    .pipe_to(["sort"]) \
+    .cpu(1).memory("200M") \
+    .stdout_to("results.txt")
 ```
 
 ### Job Parameters
 
 | Parameter | Type | Description | Example |
 |-----------|------|-------------|---------|
-| `cmd` | `List[str]` | Command to execute (required) | `["python", "script.py"]` |
-| `p` | `int` or `str` | CPU cores needed | `2`, `"2"` |
-| `m` | `str` or `int` | Memory requirement | `"1G"`, `1024` |
+| `cmd` | `List[str]` or `Pipeline` | Command to execute (required) | `["python", "script.py"]` |
+| `p`/`cpu`/`cpus` | `int` or `str` | CPU cores needed | `2`, `"2"` |
+| `m`/`memory` | `str` or `int` | Memory requirement | `"1G"`, `1024` |
 | `id` | `str` | Custom job identifier | `"analysis_job"` |
 | `cwd` | `str` | Working directory | `"/path/to/workdir"` |
 | `env` | `Dict[str, str]` | Environment variables | `{"PATH": "/custom/bin"}` |
 | `timeout` | `float` | Timeout in seconds | `300.0` |
+| `stdout` | `str` | File path for stdout redirection | `"output.txt"` |
+| `stderr` | `str` | File path for stderr redirection | `"errors.txt"` |
 
 ### Memory Formats
 

@@ -73,6 +73,7 @@ nav:
   - Home: index.md
   - User Guide:
     - Adding Jobs: guide/jobs.md
+    - Advanced Features: guide/advanced.md
   - API Reference:
     - Overview: api/overview.md
 

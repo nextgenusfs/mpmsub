@@ -7,7 +7,10 @@ Welcome to the mpmsub documentation! This library provides a simple, intuitive i
 ## ✨ Key Features
 
 - **🚀 Simple API**: Easy-to-use interface for subprocess execution
-- **🧠 Memory-aware scheduling**: Automatically manages memory constraints  
+- **🧠 Memory-aware scheduling**: Automatically manages memory constraints
+- **🔗 Pipeline support**: Chain subprocess commands with automatic piping
+- **📁 Output redirection**: Redirect stdout/stderr to files automatically
+- **🎛️ Flexible API**: Multiple parameter names (p/cpu/cpus, m/memory) for convenience
 - **📊 Resource monitoring**: Tracks actual vs estimated resource usage
 - **🔍 Job profiling**: Measure actual memory usage to optimize future runs
 - **📈 Progress tracking**: Optional progress bar with ETA for long-running jobs
@@ -21,13 +24,20 @@ Welcome to the mpmsub documentation! This library provides a simple, intuitive i
 ```python
 import mpmsub
 
-# Create a cluster with 6 CPUs and 16GB memory limit
-p = mpmsub.cluster(p=6, m="16G")
+# Create a cluster with 6 CPUs and 16GB memory limit (flexible API)
+p = mpmsub.cluster(cpu=6, memory="16G")  # or p=6, m="16G"
 
 # Add jobs using different interfaces
 p.jobs.append({"cmd": ["echo", "dict job"], "p": 1, "m": "1G"})
-p.jobs.append(mpmsub.Job(["echo", "object job"]).cpu(2).memory("2G"))
-p.jobs.append(mpmsub.job(["echo", "convenience job"], p=1, m="500M"))
+p.jobs.append(mpmsub.Job(["echo", "object job"]).cpu(2).memory("2G").stdout_to("output.txt"))
+p.jobs.append(mpmsub.job(["echo", "convenience job"], cpu=1, memory="500M"))
+
+# Add a pipeline that chains commands together
+p.jobs.append(mpmsub.pipeline([
+    ["cat", "data.txt"],
+    ["grep", "pattern"],
+    ["sort"]
+], cpu=1, memory="200M", stdout="results.txt"))
 
 # Run all jobs with optimal scheduling
 results = p.run()
@@ -50,7 +60,9 @@ pip install mpmsub
 Traditional multiprocessing libraries focus on CPU parallelism but ignore memory constraints. mpmsub solves this by:
 
 - **Intelligent scheduling**: Prevents memory exhaustion by considering both CPU and memory requirements
-- **Real-time monitoring**: Tracks actual resource usage to improve future predictions  
+- **Pipeline support**: Chain subprocess commands like shell pipes with automatic resource management
+- **Output management**: Automatic redirection of stdout/stderr to files
+- **Real-time monitoring**: Tracks actual resource usage to improve future predictions
 - **Flexible interfaces**: Choose between dictionary, object-oriented, or convenience function APIs
 - **Production ready**: Comprehensive error handling, logging, and progress tracking
 
