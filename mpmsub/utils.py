@@ -3,8 +3,9 @@ Utility functions for mpmsub library.
 """
 
 import re
+from typing import Optional, Union
+
 import psutil
-from typing import Union, Optional
 
 
 def parse_memory_string(memory: Union[str, int, None]) -> Optional[int]:

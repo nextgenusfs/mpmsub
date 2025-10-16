@@ -3,15 +3,16 @@
 Basic tests for mpmsub library.
 """
 
-import sys
 import os
+import sys
+
 import pytest
 
 # Add parent directory to path so we can import mpmsub
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import mpmsub
-from mpmsub.utils import parse_memory_string, parse_cpu_string, validate_job
+from mpmsub.utils import parse_cpu_string, parse_memory_string, validate_job
 
 
 class TestUtils:

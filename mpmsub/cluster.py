@@ -2,25 +2,26 @@
 Core Cluster class for mpmsub library.
 """
 
+import logging
 import os
-import sys
-import time
 import subprocess
+import sys
 import threading
-import psutil
-from typing import List, Dict, Any, Optional, Union
+import time
+from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
-from collections import defaultdict
-import logging
+from typing import Any, Dict, List, Optional, Union
+
+import psutil
 
 from .utils import (
-    parse_memory_string,
-    parse_cpu_string,
-    get_system_resources,
-    validate_job,
-    format_memory,
     format_duration,
+    format_memory,
+    get_system_resources,
+    parse_cpu_string,
+    parse_memory_string,
+    validate_job,
 )
 
 
