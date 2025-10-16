@@ -2,34 +2,31 @@
 
 **Memory-aware multiprocessing subprocess execution library**
 
-Welcome to the mpmsub documentation! This library provides a simple, intuitive interface for running subprocess commands with intelligent memory-aware scheduling and resource management.
+mpmsub provides a simple interface for running subprocess commands with intelligent memory-aware scheduling and resource management.
 
-## ✨ Key Features
+## Key Features
 
-- **🚀 Simple API**: Easy-to-use interface for subprocess execution
-- **🧠 Memory-aware scheduling**: Automatically manages memory constraints
-- **🔗 Pipeline support**: Chain subprocess commands with automatic piping
-- **📁 Output redirection**: Redirect stdout/stderr to files automatically
-- **🎛️ Flexible API**: Multiple parameter names (p/cpu/cpus, m/memory) for convenience
-- **📊 Resource monitoring**: Tracks actual vs estimated resource usage
-- **🔍 Job profiling**: Measure actual memory usage to optimize future runs
-- **📈 Progress tracking**: Optional progress bar with ETA for long-running jobs
-- **⚙️ Flexible defaults**: Jobs default to 1 CPU and unlimited memory if not specified
-- **⚡ Parallel execution**: Optimizes job scheduling based on available resources
-- **📋 Comprehensive reporting**: Detailed statistics and performance metrics
-- **🎯 Multiple interfaces**: Dictionary, object-oriented, and convenience function APIs
+- **Simple API**: Easy-to-use interface for subprocess execution
+- **Memory-aware scheduling**: Automatically manages memory constraints
+- **Pipeline support**: Chain subprocess commands with automatic piping
+- **Output redirection**: Redirect stdout/stderr to files automatically
+- **Flexible API**: Multiple parameter names (p/cpu/cpus, m/memory) for convenience
+- **Resource monitoring**: Tracks actual vs estimated resource usage
+- **Job profiling**: Measure actual memory usage to optimize future runs
+- **Progress tracking**: Optional progress bar with ETA for long-running jobs
+- **Multiple interfaces**: Dictionary, object-oriented, and convenience function APIs
 
-## 🚀 Quick Example
+## Quick Example
 
 ```python
 import mpmsub
 
-# Create a cluster with 6 CPUs and 16GB memory limit (flexible API)
-p = mpmsub.cluster(cpu=6, memory="16G")  # or p=6, m="16G"
+# Create a cluster with 6 CPUs and 16GB memory limit
+p = mpmsub.cluster(cpu=6, memory="16G")
 
 # Add jobs using different interfaces
 p.jobs.append({"cmd": ["echo", "dict job"], "p": 1, "m": "1G"})
-p.jobs.append(mpmsub.Job(["echo", "object job"]).cpu(2).memory("2G").stdout_to("output.txt"))
+p.jobs.append(mpmsub.Job(["echo", "object job"]).cpu(2).memory("2G"))
 p.jobs.append(mpmsub.job(["echo", "convenience job"], cpu=1, memory="500M"))
 
 # Add a pipeline that chains commands together
@@ -37,57 +34,36 @@ p.jobs.append(mpmsub.pipeline([
     ["cat", "data.txt"],
     ["grep", "pattern"],
     ["sort"]
-], cpu=1, memory="200M", stdout="results.txt"))
+], cpu=1, memory="200M"))
 
 # Run all jobs with optimal scheduling
 results = p.run()
-
-# Analyze results
-for job in p.completed_jobs:
-    print(f"Job: {job.cmd}")
-    print(f"Runtime: {job.runtime:.2f}s")
-    print(f"Memory used: {job.memory_used:.1f}MB")
 ```
 
-## 📦 Installation
+## Installation
 
 ```bash
 pip install mpmsub
 ```
 
-## 🎯 Why mpmsub?
+## Why mpmsub?
 
 Traditional multiprocessing libraries focus on CPU parallelism but ignore memory constraints. mpmsub solves this by:
 
-- **Intelligent scheduling**: Prevents memory exhaustion by considering both CPU and memory requirements
-- **Pipeline support**: Chain subprocess commands like shell pipes with automatic resource management
-- **Output management**: Automatic redirection of stdout/stderr to files
-- **Real-time monitoring**: Tracks actual resource usage to improve future predictions
-- **Flexible interfaces**: Choose between dictionary, object-oriented, or convenience function APIs
-- **Production ready**: Comprehensive error handling, logging, and progress tracking
+- Intelligent scheduling that prevents memory exhaustion
+- Pipeline support for chaining subprocess commands
+- Automatic output redirection to files
+- Real-time resource monitoring and tracking
+- Multiple flexible interfaces (dictionary, object-oriented, convenience functions)
 
-## 📚 Documentation Sections
+## Documentation
 
-### User Guide
-- **[Adding Jobs](guide/jobs.md)** - Learn about the three job interfaces and how to use them effectively
+- **[Adding Jobs](guide/jobs.md)** - Learn about the job interfaces and how to use them
+- **[Advanced Features](guide/advanced.md)** - Pipelines, output redirection, and flexible API usage
+- **[API Reference](api/overview.md)** - Complete API documentation
 
-### API Reference  
-- **[API Overview](api/overview.md)** - Complete API documentation with examples and type hints
+## Links
 
-## 🔗 Links
-
-- **[GitHub Repository](https://github.com/nextgenusfs/mpmsub)** - Source code and issues
-- **[PyPI Package](https://pypi.org/project/mpmsub/)** - Package installation
-- **[License](https://github.com/nextgenusfs/mpmsub/blob/main/LICENSE)** - MIT License
-
-## 🤝 Contributing
-
-We welcome contributions! Please see our GitHub repository for:
-- Issue reporting
-- Feature requests  
-- Pull requests
-- Development setup
-
----
-
-**Get started with the [User Guide](guide/jobs.md) or explore the [API Reference](api/overview.md)!**
+- [GitHub Repository](https://github.com/nextgenusfs/mpmsub)
+- [PyPI Package](https://pypi.org/project/mpmsub/)
+- [License](https://github.com/nextgenusfs/mpmsub/blob/main/LICENSE)
