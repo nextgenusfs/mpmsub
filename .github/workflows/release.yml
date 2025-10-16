@@ -1,4 +1,4 @@
-name: Create Release
+name: Create Release (Release Only)
 
 on:
   workflow_dispatch:
@@ -77,8 +77,9 @@ jobs:
         prerelease: ${{ github.event.inputs.prerelease }}
         generate_release_notes: true
 
-    - name: Trigger PyPI Publish
+    - name: Release Created
       if: success()
       run: |
-        echo "Release created successfully. The publish workflow will automatically trigger on release publication."
-        echo "Release URL: ${{ steps.create_release.outputs.url }}"
+        echo "✅ GitHub release created successfully!"
+        echo "📦 To publish to PyPI, use the 'Publish Package' workflow manually."
+        echo "🔗 This workflow only creates releases - it does not publish packages."

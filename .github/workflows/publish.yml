@@ -15,8 +15,6 @@ on:
         description: 'Version to publish (leave empty to use current version from pyproject.toml)'
         required: false
         type: string
-  release:
-    types: [published]
 
 jobs:
   test:
@@ -53,6 +51,7 @@ jobs:
       url: ${{ github.event.inputs.target == 'pypi' && 'https://pypi.org/p/mpmsub' || 'https://test.pypi.org/p/mpmsub' }}
     permissions:
       id-token: write  # IMPORTANT: this permission is mandatory for trusted publishing
+      contents: write  # IMPORTANT: this permission is mandatory for creating releases
 
     steps:
     - uses: actions/checkout@v4
@@ -95,34 +94,32 @@ jobs:
       if: github.event.inputs.target == 'pypi'
       uses: pypa/gh-action-pypi-publish@release/v1
 
-  publish-release:
-    needs: test
-    runs-on: ubuntu-latest
-    if: github.event_name == 'release' && github.event.action == 'published'
-    environment:
-      name: pypi
-      url: https://pypi.org/p/mpmsub
-    permissions:
-      id-token: write  # IMPORTANT: this permission is mandatory for trusted publishing
-
-    steps:
-    - uses: actions/checkout@v4
-
-    - name: Set up Python
-      uses: actions/setup-python@v5
-      with:
-        python-version: '3.9'
-
-    - name: Install build dependencies
+    - name: Get current version for release
+      if: github.event.inputs.target == 'pypi'
+      id: get_version
       run: |
-        python -m pip install --upgrade pip
-        pip install build twine
+        CURRENT_VERSION=$(grep 'version = ' pyproject.toml | sed 's/version = "\(.*\)"/\1/')
+        echo "version=$CURRENT_VERSION" >> $GITHUB_OUTPUT
+        echo "Creating release for version: $CURRENT_VERSION"
 
-    - name: Build package
-      run: python -m build
+    - name: Create GitHub Release
+      if: github.event.inputs.target == 'pypi'
+      uses: softprops/action-gh-release@v1
+      with:
+        tag_name: v${{ steps.get_version.outputs.version }}
+        name: Release v${{ steps.get_version.outputs.version }}
+        body: |
+          Release v${{ steps.get_version.outputs.version }}
 
-    - name: Check package
-      run: twine check dist/*
+          ## Installation
 
-    - name: Publish to PyPI
-      uses: pypa/gh-action-pypi-publish@release/v1
+          ```bash
+          pip install mpmsub==${{ steps.get_version.outputs.version }}
+          ```
+
+          ## Changes
+
+          See the commit history for details.
+        draft: false
+        prerelease: false
+        generate_release_notes: true
