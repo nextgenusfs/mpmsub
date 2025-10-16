@@ -527,14 +527,17 @@ class Cluster:
         """Print detailed information about cluster resources."""
         import psutil
 
+        from .utils import _get_available_memory_mb
+
         # System resources
         system_memory = psutil.virtual_memory()
         system_cpus = psutil.cpu_count()
+        available_memory_mb = _get_available_memory_mb(system_memory)
 
         print("🖥️  System Resources:")
         print(f"   CPUs: {system_cpus} cores")
         print(
-            f"   Memory: {format_memory(system_memory.total / (1024**2))} total, {format_memory(system_memory.available / (1024**2))} available"
+            f"   Memory: {format_memory(system_memory.total / (1024**2))} total, {format_memory(available_memory_mb)} available"
         )
         print()
 

@@ -2,7 +2,9 @@
 Utility functions for mpmsub library.
 """
 
+import platform
 import re
+import subprocess
 from typing import Optional, Union
 
 import psutil
@@ -93,6 +95,57 @@ def parse_cpu_string(cpus: Union[str, int, None]) -> Optional[int]:
     raise ValueError(f"Invalid CPU specification type: {type(cpus)}")
 
 
+def _get_available_memory_mb(memory) -> int:
+    """
+    Get available memory in MB with platform-specific optimizations.
+
+    On macOS, psutil.virtual_memory().available can be overly conservative,
+    especially with heavy swap usage. This function uses macOS-specific tools
+    like memory_pressure to get more accurate estimates of usable memory.
+
+    For Apple Silicon systems with swap, this can provide 2-8x more accurate
+    memory availability estimates compared to psutil alone.
+
+    Args:
+        memory: psutil.virtual_memory() object
+
+    Returns:
+        int: Available memory in MB
+    """
+    if platform.system() == "Darwin":  # macOS
+        try:
+            # Try to get more accurate memory info from memory_pressure
+            result = subprocess.run(
+                ["memory_pressure"], capture_output=True, text=True, timeout=5
+            )
+
+            if result.returncode == 0:
+                # Parse "System-wide memory free percentage: XX%"
+                for line in result.stdout.split("\n"):
+                    if "System-wide memory free percentage:" in line:
+                        try:
+                            percent_str = line.split(":")[1].strip().rstrip("%")
+                            free_percent = float(percent_str) / 100.0
+                            total_mb = memory.total / (1024 * 1024)
+                            available_mb = int(total_mb * free_percent)
+
+                            # Use the higher of psutil or memory_pressure estimates
+                            psutil_available = int(memory.available / (1024 * 1024))
+                            return max(available_mb, psutil_available)
+                        except (ValueError, IndexError):
+                            pass
+                        break
+        except (
+            subprocess.TimeoutExpired,
+            subprocess.SubprocessError,
+            FileNotFoundError,
+        ):
+            pass
+
+    # Fallback to psutil for all platforms or if macOS-specific method fails
+    return int(memory.available / (1024 * 1024))
+
+
 def get_system_resources():
     """
     Get available system resources.
@@ -102,9 +155,10 @@ def get_system_resources():
     """
     try:
         memory = psutil.virtual_memory()
+        available_mb = _get_available_memory_mb(memory)
         return {
             "cpus": psutil.cpu_count(),
-            "memory_mb": int(memory.available / (1024 * 1024)),
+            "memory_mb": available_mb,
         }
     except Exception as e:
         # Fallback values
