@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "mpmsub"
-version = "2025.09.16"
+version = "2025.9.16"
 description = "Memory-aware multiprocessing subprocess execution library"
 readme = "README.md"
 license = {text = "MIT"}
@@ -40,6 +40,11 @@ dev = [
     "black",
     "flake8",
     "mypy",
+    "isort",
+    "bandit",
+    "pre-commit",
+    "build",
+    "twine",
 ]
 docs = [
     "mkdocs-material>=9.0",
@@ -71,3 +76,27 @@ python_version = "3.8"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
+ignore_missing_imports = true
+
+[tool.isort]
+profile = "black"
+multi_line_output = 3
+line_length = 88
+
+[tool.flake8]
+max-line-length = 88
+extend-ignore = ["E203", "W503"]
+exclude = [
+    ".git",
+    "__pycache__",
+    "build",
+    "dist",
+    ".eggs",
+    "*.egg-info",
+    ".venv",
+    ".env"
+]
+
+[tool.bandit]
+exclude_dirs = ["tests", "examples"]
+skips = ["B101"]  # Skip assert_used test
