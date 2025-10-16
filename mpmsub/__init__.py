@@ -5,7 +5,7 @@ A simple, intuitive library for running subprocess commands with intelligent
 memory-aware scheduling and resource management.
 
 Example usage:
-    import mpmsub  # Test comment for pre-commit
+    import mpmsub
 
     # Create a cluster with 6 CPUs and 16GB memory limit
     p = mpmsub.cluster(p=6, m="16G")
