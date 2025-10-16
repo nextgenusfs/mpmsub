@@ -5,7 +5,7 @@ A simple, intuitive library for running subprocess commands with intelligent
 memory-aware scheduling and resource management.
 
 Example usage:
-    import mpmsub
+    import mpmsub  # Test comment for pre-commit
 
     # Create a cluster with 6 CPUs and 16GB memory limit
     p = mpmsub.cluster(p=6, m="16G")
@@ -24,11 +24,11 @@ Example usage:
         print(f"Memory used: {job['memory_used']:.1f}MB")
 """
 
-from typing import List, Optional, Union, Any
+import importlib.metadata
+from typing import Any, List, Optional, Union
 
 from .cluster import Cluster, Job, Pipeline
-from .utils import parse_memory_string, parse_cpu_string, format_memory
-import importlib.metadata
+from .utils import format_memory, parse_cpu_string, parse_memory_string
 
 try:
     __version__ = importlib.metadata.version("mpmsub")
@@ -60,7 +60,8 @@ def cluster(
            If None, auto-detects available memory.
         cpu: Alternative to 'p' - Number of CPUs (int) or CPU specification (str).
         cpus: Alternative to 'p' - Number of CPUs (int) or CPU specification (str).
-        memory: Alternative to 'm' - Memory limit as string (e.g., "16G", "2048M") or int (MB).
+        memory: Alternative to 'm' - Memory limit as string (e.g., "16G", "2048M")
+                or int (MB).
         verbose: Whether to print progress information.
         progress_bar: Whether to show a progress bar during execution.
         describe: Whether to print cluster resource information.
@@ -119,7 +120,7 @@ def job(
     Examples:
         >>> import mpmsub
         >>> j = mpmsub.job(["echo", "hello"], p=1, m="100M")
-        >>> j = mpmsub.job(["echo", "hello"], cpu=1, memory="100M")  # Alternative syntax
+        >>> j = mpmsub.job(["echo", "hello"], cpu=1, memory="100M")  # Alt syntax
         >>> j = mpmsub.job(["python", "script.py"], p=2, m="1G", timeout=300)
     """
     # Handle multiple CPU parameter names (p, cpu, cpus)
