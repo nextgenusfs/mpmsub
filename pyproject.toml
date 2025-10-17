@@ -72,7 +72,7 @@ python_functions = ["test_*"]
 addopts = "--cov=mpmsub --cov-report=html --cov-report=term-missing"
 
 [tool.mypy]
-python_version = "3.9"
+python_version = "2025.10.16"
 warn_return_any = false
 warn_unused_configs = true
 disallow_untyped_defs = false
